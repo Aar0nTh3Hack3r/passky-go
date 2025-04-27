@@ -45,6 +45,7 @@ func CreateAccount(username string, password string, email string) []byte{
 		log.Println(err)
 		return Json(3)
 	}
+	user_cnt++
 	
 	return Json(0)
 }
@@ -131,17 +132,17 @@ func GetToken(username string, password string, otp string) []byte{
 func GetInfo() []byte {
 	JSON_OBJ := GetInfoResopnse {
 		Version: GetVersion(),
-		Users: 0,
+		Users: user_cnt,
 		MaxUsers: GetMaxAccounts(),
-		Passwords: 0,
+		Passwords: password_cnt,
 		MaxPasswords: GetMaxPasswords(),
 		Location: GetLocation(),
 		HashingCost: 0,
 	}
-	return Json2(0, JSON_OBJ);
+	return Json2(0, &JSON_OBJ);
 }
 
-func SavePassword(username string, token string, website string, username2 string, password2 string, message string) []byte{
+func SavePasswords(username string, token string, passwords []Password) []byte{
 	if !preg_match(USERNAME_REGEX, username) {
 		return Json(1)
 	}
@@ -151,7 +152,6 @@ func SavePassword(username string, token string, website string, username2 strin
 	}
 
 	user := new(User)
-
 	switch UserfromUsername(username, user){
 		case 1:
 			return Json(1);
@@ -159,24 +159,62 @@ func SavePassword(username string, token string, website string, username2 strin
 			return Json(505);
 	}
 
-	if err_code := IsContentValid(website, username2, password2, message); err_code != 0 {
-		return Json(err_code)
-	}
-
 	if(user.Max_passwords >= 0){
 		/*$password_count = self::getUserPasswordCount($username);
 		if($password_count === -1) return Display::json(505);
 		if($password_count >= $user->max_passwords) return Display::json(16);*/
 	}
-		
-	_, err := db.Exec("INSERT INTO passwords(owner, website, username, password, message) VALUES(?, ?, ?, ?, ?)",
-		username, website, username2, password2, message,
-	)
+
+	transaction, err := db.Begin()
 	if err != nil {
+		log.Println(err)
+		return Json(505)
+	}
+	prepared, err := transaction.Prepare("INSERT INTO passwords(owner, website, username, password, message) VALUES(?, ?, ?, ?, ?)")
+	if err != nil {
+		log.Println(err)
+		return Json(505)
+	}
+
+	valid_passwords := 0
+	for _, pw := range passwords {
+		if err_code := pw.IsPasswordConstentValid(); err_code != 0 {
+			if len(passwords) == 1 {
+				transaction.Rollback()
+				return Json(err_code)
+			}
+			continue
+		}
+		valid_passwords++
+		_, err := prepared.Exec(username, pw.Website, pw.Username, pw.Password, pw.Message)
+		if err != nil {
+			log.Println(err)
+			transaction.Rollback()
+			return Json(3)
+		}
+	}
+	if err := transaction.Commit(); err != nil {
 		log.Println(err)
 		return Json(3)
 	}
-	return Json(0)
+
+	password_cnt += valid_passwords
+
+	JSON_OBJ := ImportPasswordsResopnse{
+		Import_success: valid_passwords,
+		Import_error: len(passwords) - valid_passwords,
+	}
+
+	return Json2(0, &JSON_OBJ)
+}
+
+func SavePassword(username string, token string, website string, username2 string, password2 string, message string) []byte{
+	return SavePasswords(username, token, []Password{{
+		Website: website,
+		Username: username2,
+		Password: password2,
+		Message: message,
+	}})
 }
 
 func GetPasswords(username string, token string) []byte{
@@ -230,5 +268,50 @@ func EditPassword(username string, token string, password_id int, website string
 	if n < 1 {
 		return Json(10)
 	}
+	return Json(0)
+}
+
+func DeletePasswords(username string, token string, password_id int, delete_account bool) []byte{
+	// This function is 3 in 1:
+	//  it is deletePassword,  when password_id >=  0 and delete_account == false
+	//  it is deletePasswords, when password_id == -1 and delete_account == false
+	//  it is deleteAccount,   when delete_account == true (in this case password_id will be ignored)
+	if !preg_match(USERNAME_REGEX, username) {
+		return Json(1)
+	}
+	username = strings.ToLower(username);
+	if !IsTokenValid(username, token) {
+		return Json(25)
+	}
+	if delete_account {
+		password_id = -1
+	}
+
+	res, err := db.Exec("DELETE FROM passwords WHERE (? or password_id = ?) and owner = ?", 
+		password_id == -1, password_id, username)
+	if err != nil {
+		log.Println(err)
+		return Json(11)
+	}
+	n, err := res.RowsAffected()
+	password_cnt -= int(n)
+	if err != nil {
+		log.Println(err)
+		return Json(11)
+	}
+	if n < 1 && password_id != -1 {
+		return Json(10)
+	}
+
+	if delete_account {
+		_, err = db.Exec("DELETE FROM users WHERE username = ?", username)
+		delete(tokens, username)
+		if err != nil {
+			log.Println(err)
+			return Json(11)
+		}
+		user_cnt--
+	}
+
 	return Json(0)
 }

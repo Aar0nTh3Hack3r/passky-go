@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,7 +12,6 @@ import (
 )
 
 func main() {
-    passky.GetSecret()
     if err := passky.InitDB(); err != nil {
         log.Fatal(err)
     }
@@ -40,19 +40,19 @@ func main() {
         if auth := r.Header.Get("Authorization"); auth != "" {
             auths := strings.Split(auth, " ")
             if len(auths) != 2 {
-                w.WriteHeader(500)
+                w.WriteHeader(400)
                 return
             }
             decoded, err := base64.StdEncoding.DecodeString(auths[1])
             if err != nil {
-                fmt.Println(err)
-                w.WriteHeader(500)
+                log.Println(err)
+                w.WriteHeader(400)
                 return
             }
             fmt.Println(auth)
             auths = strings.Split(string(decoded), ":")
             if len(auths) != 2 {
-                w.WriteHeader(500)
+                w.WriteHeader(400)
                 return
             }
             user = auths[0]
@@ -78,10 +78,41 @@ func main() {
             case "editPassword":
                 password_id, err := strconv.Atoi(r.FormValue("password_id"))
                 if err != nil {
-                    out=(passky.Json(14)) // Eh. no but ok
-                    break
+                    log.Println(err)
+                    w.WriteHeader(400)
+                    return
                 }
                 out=(passky.EditPassword(user, password, password_id, r.FormValue("website"), r.FormValue("username"), r.FormValue("password"), r.FormValue("message")))
+                break
+            case "importPasswords":
+                decoder := json.NewDecoder(r.Body)
+                var passwords []passky.Password
+                if err := decoder.Decode(&passwords); err != nil {
+                    log.Println(err)
+                    out=(passky.Json(14))
+                    break
+                }
+                fmt.Println(passwords)
+                out=(passky.SavePasswords(user, password, passwords))
+                break
+            case "deletePassword":
+                password_id, err := strconv.Atoi(r.FormValue("password_id"))
+                if err != nil {
+                    log.Println(err)
+                    w.WriteHeader(400)
+                    return
+                }
+                if password_id < 0 {
+                    out=(passky.Json(10))
+                    break
+                }
+                out=(passky.DeletePasswords(user, password, password_id, false))
+                break
+            case "deletePasswords":
+                out=(passky.DeletePasswords(user, password, -1, false))
+                break
+            case "deleteAccount":
+                out=(passky.DeletePasswords(user, password, -1, true))
                 break
             default:
                 out=(passky.Json(401))

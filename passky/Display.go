@@ -31,6 +31,11 @@ type GetInfoResopnse struct {
 	Location string `json:"location"`
 	HashingCost int `json:"hashingCost"`
 }
+type ImportPasswordsResopnse struct {
+	ErrorResponse
+	Import_success int `json:"import_success"`
+	Import_error int `json:"import_error"`
+}
 
 func Json2(error_code int, JSON_OBJ interface{}) []byte {
 	if JSON_OBJ == nil {

@@ -9,6 +9,7 @@ import (
 )
 
 var db *sql.DB
+var user_cnt, password_cnt int
 
 type User struct {
 	User_id int64
@@ -131,6 +132,13 @@ func InitDB() error {
 	if err != nil {
 		return err
 	}
+
+    if err := db.QueryRow("SELECT COUNT(1) FROM users").Scan(&user_cnt); err != nil {
+        return err
+    }
+    if err := db.QueryRow("SELECT COUNT(1) FROM passwords").Scan(&password_cnt); err != nil {
+        return err
+    }
 
 	return nil
 }
