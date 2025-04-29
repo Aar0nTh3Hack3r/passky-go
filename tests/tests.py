@@ -47,6 +47,14 @@ def create_account(state):
     assertSuccessful(r)
     state.users += 1
 
+@Test
+def auth_with_empty_token(state):
+    r = requests.get(URL + 'getPasswords', headers={'Authorization':  state.getAuth("")})
+    print(r.text)
+    assert r.status_code == 200
+    assert r.json()['error'] == 25
+    assert r.json()['info'] == 'Token is incorrect!'
+
 Test(get_info)
 
 @Test
@@ -90,7 +98,7 @@ for test in tests:
         print('*'*5, 'PASS', '*'*5)
     except Exception as e:
         ok = False
-        if test == create_account or test == get_info:
+        if test == create_account or test == get_info or test == auth_with_empty_token:
             traceback.print_exc()
             print('!' * 20, 'FAIL', '!' * 20)
             continue

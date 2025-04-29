@@ -59,7 +59,11 @@ func GenerateToken(username string) string {
 }
 func IsTokenValid(username string, token string) bool {
 	//return hmac.Equal([]byte(GenerateToken(username)), []byte(token))
-    return subtle.ConstantTimeCompare([]byte(token), []byte(tokens[username])) == 1
+    valid_token, ok := tokens[username]
+    if !ok {
+        return false
+    }
+    return subtle.ConstantTimeCompare([]byte(token), []byte(valid_token)) == 1
 }
 
 func (pw *Password) IsPasswordConstentValid() int {
