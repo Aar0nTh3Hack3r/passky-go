@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"passky/passky"
 	"strconv"
 	"strings"
+
+	passky "passky/passky-lib"
 )
 
 func main() {
@@ -121,5 +122,5 @@ func main() {
         w.Write(out)
     })
     fmt.Println("Listening on port 9090")
-    http.ListenAndServe(":9090", nil)
+    log.Fatal(http.ListenAndServe(":9090", nil))
 }
